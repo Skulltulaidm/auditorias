@@ -8,7 +8,7 @@ from io import BytesIO
 from datetime import datetime
 from config import CATEGORIAS_CONFIG, CAMPUS_CODES
 from validador import leer_csv_con_encoding, auditar_archivo
-from gemini_corrector import GeminiCorrector
+from openai_corrector import OpenAICorrector
 import re
 
 # Configuración de la página
@@ -24,8 +24,15 @@ def procesar_archivos_categoria(archivos_subidos, categoria):
     archivos_con_problemas = []
     total_correcciones = []
     
-    # Inicializar corrector de Gemini
-    corrector = GeminiCorrector()
+    # Inicializar corrector de OpenAI
+    corrector = OpenAICorrector()
+    
+    # Verificar conexión con OpenAI
+    if corrector.client:
+        if corrector.test_connection():
+            st.success("✅ Conectado con OpenAI - Corrección inteligente activada")
+        else:
+            st.warning("⚠️ Problema de conexión con OpenAI - Usando corrección básica")
     
     # Inicializar resultados para todos los campus
     for campus in CAMPUS_CODES:
@@ -117,7 +124,7 @@ def procesar_archivos_categoria(archivos_subidos, categoria):
         st.info(f"ℹ️ {len(archivos_con_problemas)} archivo(s) requirieron atención especial")
     
     if total_correcciones:
-        with st.expander(f"🤖 Gemini realizó {len(total_correcciones)} correcciones automáticas"):
+        with st.expander(f"🤖 OpenAI realizó {len(total_correcciones)} correcciones automáticas"):
             for correccion in total_correcciones[:10]:  # Mostrar solo las primeras 10
                 st.write(f"• {correccion}")
             if len(total_correcciones) > 10:
@@ -141,28 +148,14 @@ def main():
     st.title("📊 Auditor de Archivos CSV - Actividades Estudiantiles")
     st.markdown("---")
     
-    # Configurar API Key de Gemini
-    with st.sidebar:
-        st.header("🔧 Configuración")
-        api_key = st.text_input(
-            "API Key de Gemini:", 
-            type="password",
-            help="Opcional: Para corrección ortográfica avanzada"
-        )
-        if api_key:
-            import os
-            os.environ['GEMINI_API_KEY'] = api_key
-            st.success("✅ API Key configurada")
-    
     st.markdown("""
     ### Instrucciones de uso:
-    1. (Opcional) Configura tu API Key de Gemini en la barra lateral para corrección ortográfica avanzada
-    2. Selecciona la categoría de archivos que deseas auditar
-    3. Sube los archivos CSV correspondientes
-    4. Revisa los resultados de la auditoría
-    5. Descarga el reporte en Excel
+    1. Selecciona la categoría de archivos que deseas auditar
+    2. Sube los archivos CSV correspondientes
+    3. Revisa los resultados de la auditoría
+    4. Descarga el reporte en Excel
     
-    🤖 **Con Gemini**: Corrección inteligente de errores ortográficos en campos de diccionario
+    🤖 **Con OpenAI**: Corrección inteligente de errores ortográficos en campos de diccionario
     """)
     
     # Selector de categoría
@@ -205,7 +198,7 @@ def main():
         f"Sube los archivos CSV para {categoria_seleccionada}:",
         type=['csv'],
         accept_multiple_files=True,
-        help="Gemini corregirá automáticamente errores ortográficos en campos de diccionario"
+        help="OpenAI corregirá automáticamente errores ortográficos en campos de diccionario"
     )
     
     if archivos_subidos:
@@ -213,7 +206,7 @@ def main():
         
         # Botón para procesar
         if st.button("🔍 Procesar Auditoría", type="primary"):
-            with st.spinner("Procesando archivos con Gemini..."):
+            with st.spinner("Procesando archivos con OpenAI..."):
                 # Procesar archivos
                 resultados_df = procesar_archivos_categoria(archivos_subidos, categoria_seleccionada)
                 
@@ -275,7 +268,7 @@ def main():
         
         if archivos_completos:
             if st.button("🚀 Procesar Auditoría Completa", type="primary"):
-                with st.spinner("Procesando todas las categorías con Gemini..."):
+                with st.spinner("Procesando todas las categorías con OpenAI..."):
                     resultados_completos = {}
                     
                     for categoria, archivos in archivos_completos.items():
