@@ -161,7 +161,7 @@ CATEGORIAS_CONFIG = {
     }
 }
 
-# Columnas que NO se pueden corregir con Gemini
+# Columnas que NO se pueden corregir automáticamente
 COLUMNAS_NO_CORREGIBLES = [
     'NOMBRE',
     'APELLIDO PATERNO', 
