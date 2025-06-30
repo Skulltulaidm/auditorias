@@ -8,7 +8,7 @@ from io import BytesIO
 from datetime import datetime
 from config import CATEGORIAS_CONFIG, CAMPUS_CODES
 from validador import leer_csv_con_encoding, auditar_archivo
-from openai_corrector import OpenAICorrector
+from corrector_local import CorrectorLocal
 import re
 
 # Configuración de la página
@@ -24,15 +24,8 @@ def procesar_archivos_categoria(archivos_subidos, categoria):
     archivos_con_problemas = []
     total_correcciones = []
     
-    # Inicializar corrector de OpenAI
-    corrector = OpenAICorrector()
-    
-    # Verificar conexión con OpenAI
-    if corrector.client:
-        if corrector.test_connection():
-            st.success("✅ Conectado con OpenAI - Corrección inteligente activada")
-        else:
-            st.warning("⚠️ Problema de conexión con OpenAI - Usando corrección básica")
+    # Inicializar corrector local
+    corrector = CorrectorLocal()
     
     # Inicializar resultados para todos los campus
     for campus in CAMPUS_CODES:
@@ -124,11 +117,11 @@ def procesar_archivos_categoria(archivos_subidos, categoria):
         st.info(f"ℹ️ {len(archivos_con_problemas)} archivo(s) requirieron atención especial")
     
     if total_correcciones:
-        with st.expander(f"🤖 OpenAI realizó {len(total_correcciones)} correcciones automáticas"):
-            for correccion in total_correcciones[:10]:  # Mostrar solo las primeras 10
+        with st.expander(f"🔧 Se realizaron {len(total_correcciones)} correcciones automáticas"):
+            for correccion in total_correcciones[:15]:  # Mostrar las primeras 15
                 st.write(f"• {correccion}")
-            if len(total_correcciones) > 10:
-                st.write(f"... y {len(total_correcciones) - 10} correcciones más")
+            if len(total_correcciones) > 15:
+                st.write(f"... y {len(total_correcciones) - 15} correcciones más")
     
     return pd.DataFrame(resultados)
 
@@ -148,6 +141,41 @@ def main():
     st.title("📊 Auditor de Archivos CSV - Actividades Estudiantiles")
     st.markdown("---")
     
+    # Información sobre el corrector local
+    with st.sidebar:
+        st.header("🔧 Corrector Inteligente")
+        st.info("""
+        ✅ **Corrección Local Activada**
+        
+        **Capacidades:**
+        - Corrección de acentos
+        - Mayúsculas/minúsculas
+        - Errores de tipeo menores
+        - Coincidencias parciales
+        - 100% gratuito
+        """)
+        
+        # Opción para probar el corrector
+        if st.button("🧪 Probar Corrector"):
+            from config import COMPANIAS_ARTE, TIPOS_ESPECTACULO_ARTE
+            corrector_test = CorrectorLocal()
+            
+            st.write("**Ejemplos de corrección:**")
+            ejemplos = [
+                ('musica', COMPANIAS_ARTE),
+                ('danza folklorica', COMPANIAS_ARTE), 
+                ('basquetball', ['Basquetbol']),
+                ('teatro musical', TIPOS_ESPECTACULO_ARTE),
+                ('femenino', ['Femenil', 'Varonil', 'Mixto'])
+            ]
+            
+            for valor, opciones in ejemplos:
+                resultado = corrector_test.encontrar_mejor_coincidencia(valor, opciones)
+                if resultado:
+                    st.success(f"'{valor}' → '{resultado}'")
+                else:
+                    st.error(f"'{valor}' → No encontrado")
+    
     st.markdown("""
     ### Instrucciones de uso:
     1. Selecciona la categoría de archivos que deseas auditar
@@ -155,7 +183,7 @@ def main():
     3. Revisa los resultados de la auditoría
     4. Descarga el reporte en Excel
     
-    🤖 **Con OpenAI**: Corrección inteligente de errores ortográficos en campos de diccionario
+    🔧 **Corrección automática**: El sistema corrige errores ortográficos, acentos y mayúsculas automáticamente
     """)
     
     # Selector de categoría
@@ -192,13 +220,18 @@ def main():
                 st.write(f"**{campo}:** No puede estar vacío")
             else:
                 st.write(f"**{campo}:** Validación especial")
+        
+        st.write("**Campos que NO se corrigen automáticamente:**")
+        st.write("- Nombres de personas")
+        st.write("- Apellidos")
+        st.write("- Ejercicio académico")
     
     # Subida de archivos
     archivos_subidos = st.file_uploader(
         f"Sube los archivos CSV para {categoria_seleccionada}:",
         type=['csv'],
         accept_multiple_files=True,
-        help="OpenAI corregirá automáticamente errores ortográficos en campos de diccionario"
+        help="El sistema corregirá automáticamente errores ortográficos en campos de diccionario"
     )
     
     if archivos_subidos:
@@ -206,7 +239,7 @@ def main():
         
         # Botón para procesar
         if st.button("🔍 Procesar Auditoría", type="primary"):
-            with st.spinner("Procesando archivos con OpenAI..."):
+            with st.spinner("Procesando archivos con corrector inteligente..."):
                 # Procesar archivos
                 resultados_df = procesar_archivos_categoria(archivos_subidos, categoria_seleccionada)
                 
@@ -268,7 +301,7 @@ def main():
         
         if archivos_completos:
             if st.button("🚀 Procesar Auditoría Completa", type="primary"):
-                with st.spinner("Procesando todas las categorías con OpenAI..."):
+                with st.spinner("Procesando todas las categorías..."):
                     resultados_completos = {}
                     
                     for categoria, archivos in archivos_completos.items():
