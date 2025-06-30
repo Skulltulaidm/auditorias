@@ -59,10 +59,9 @@ CATEGORIAS_CONFIG = {
 def detectar_encoding(archivo):
     """Detecta el encoding del archivo"""
     try:
-        # Leer una muestra del archivo para detectar encoding
         archivo.seek(0)
-        muestra = archivo.read(10000)  # Leer primeros 10KB
-        archivo.seek(0)  # Regresar al inicio
+        muestra = archivo.read(10000)
+        archivo.seek(0)
         
         resultado = chardet.detect(muestra)
         encoding_detectado = resultado['encoding']
@@ -148,13 +147,13 @@ def auditar_archivo(df, nombre_archivo, categoria, encoding_usado, es_utf8):
     
     # Advertencia si no es UTF-8
     if not es_utf8:
-        advertencias.append(f"ADVERTENCIA: El archivo no está en formato UTF-8 (detectado: {encoding_usado}). Se recomienda convertir a UTF-8.")
+        advertencias.append(f"Archivo no está en formato UTF-8 (detectado: {encoding_usado})")
     
     # Verificar nombre de archivo
     if categoria != 'Mentoreo':
         match = re.search(config['nombre_archivo_patron'], nombre_archivo)
         if not match:
-            errores.append(f"Nombre de archivo incorrecto. Debe seguir el patrón para {categoria}")
+            errores.append(f"Nombre de archivo incorrecto")
         else:
             campus_detectado = match.group(1)
             if campus_detectado not in CAMPUS_CODES:
@@ -199,20 +198,20 @@ def auditar_archivo(df, nombre_archivo, categoria, encoding_usado, es_utf8):
         ejercicio_col = 'EJERCICIO_ACADEMICO' if 'EJERCICIO_ACADEMICO' in df_normalizado.columns else 'Ejercicio Académico'
         if ejercicio_col in df_normalizado.columns:
             if pd.isna(row[ejercicio_col]) or str(row[ejercicio_col]).strip() != "202511":
-                errores_registros.append(f"Fila {idx+2}: Ejercicio académico debe ser '202511'")
+                errores_registros.append("Ejercicio académico incorrecto")
                 registro_valido = False
         
         # Validar NOMBRE no vacío
         nombre_col = 'NOMBRE' if 'NOMBRE' in df_normalizado.columns else 'Nombre completo'
         if nombre_col in df_normalizado.columns:
             if pd.isna(row[nombre_col]) or str(row[nombre_col]).strip() == "":
-                errores_registros.append(f"Fila {idx+2}: Nombre no puede estar vacío")
+                errores_registros.append("Nombre vacío")
                 registro_valido = False
         
         # Validar APELLIDO PATERNO no vacío
         if 'APELLIDO PATERNO' in df_normalizado.columns:
             if pd.isna(row['APELLIDO PATERNO']) or str(row['APELLIDO PATERNO']).strip() == "":
-                errores_registros.append(f"Fila {idx+2}: Apellido paterno no puede estar vacío")
+                errores_registros.append("Apellido paterno vacío")
                 registro_valido = False
         
         # Validar MATRICULA
@@ -220,13 +219,13 @@ def auditar_archivo(df, nombre_archivo, categoria, encoding_usado, es_utf8):
         if matricula_col in df_normalizado.columns:
             valida, error_msg, matricula_corregida = validar_matricula(row[matricula_col])
             if not valida:
-                errores_registros.append(f"Fila {idx+2}: {error_msg}")
+                errores_registros.append("Matrícula formato incorrecto")
                 registro_valido = False
         
         # Validar CLAVE
         if 'CLAVE' in df_normalizado.columns and config['claves_validas']:
             if pd.isna(row['CLAVE']) or str(row['CLAVE']).strip() not in config['claves_validas']:
-                errores_registros.append(f"Fila {idx+2}: Clave '{row['CLAVE']}' no es válida")
+                errores_registros.append("Clave inválida")
                 registro_valido = False
         
         # Validaciones especiales según categoría
@@ -235,47 +234,34 @@ def auditar_archivo(df, nombre_archivo, categoria, encoding_usado, es_utf8):
                 if col_especial == 'Email' and categoria == 'Mentoreo':
                     valida, error_msg = validar_email_mentoreo(row[col_especial], row[matricula_col])
                     if not valida:
-                        errores_registros.append(f"Fila {idx+2}: {error_msg}")
+                        errores_registros.append("Email formato incorrecto")
                         registro_valido = False
                 else:
                     if pd.isna(row[col_especial]) or str(row[col_especial]).strip() == "":
-                        errores_registros.append(f"Fila {idx+2}: {col_especial} no puede estar vacío")
+                        errores_registros.append(f"{col_especial} vacío")
                         registro_valido = False
         
         if registro_valido:
             registros_validos += 1
     
-    # Combinar errores estructurales y de registros, pero limitar errores de registros
-    todos_errores = errores + advertencias
-    
-    # Resumir errores de registros si hay muchos
-    if len(errores_registros) > 10:
+    # Resumir errores de registros
+    if errores_registros:
         tipos_errores = {}
         for error in errores_registros:
-            # Extraer tipo de error
-            if ':' in error:
-                tipo = error.split(':', 2)[2].strip() if error.count(':') >= 2 else error.split(':', 1)[1].strip()
+            if error not in tipos_errores:
+                tipos_errores[error] = 1
             else:
-                tipo = error
-            
-            if tipo not in tipos_errores:
-                tipos_errores[tipo] = 1
-            else:
-                tipos_errores[tipo] += 1
+                tipos_errores[error] += 1
         
-        todos_errores.append("ERRORES EN REGISTROS:")
         for tipo, count in tipos_errores.items():
-            todos_errores.append(f"- {tipo}: {count} casos")
-    else:
-        todos_errores.extend(errores_registros)
+            errores.append(f"{tipo} ({count} casos)")
     
-    return todos_errores, total_registros, registros_validos
+    return errores + advertencias, total_registros, registros_validos
 
 def procesar_archivos_categoria(archivos_subidos, categoria):
     """Procesa todos los archivos de una categoría"""
     resultados = []
-    archivos_procesados = []
-    archivos_con_errores = []
+    archivos_con_problemas = []
     
     # Inicializar resultados para todos los campus
     for campus in CAMPUS_CODES:
@@ -291,25 +277,22 @@ def procesar_archivos_categoria(archivos_subidos, categoria):
     # Procesar archivos subidos
     for archivo in archivos_subidos:
         try:
-            st.info(f"📄 Procesando archivo: {archivo.name}")
-            
             # Intentar leer el archivo con diferentes encodings
             df, encoding_usado, es_utf8, error_lectura = leer_csv_con_encoding(archivo)
             
             if df is None:
                 # No se pudo leer el archivo
-                st.error(f"❌ El archivo '{archivo.name}' no cumplió los requerimientos:")
-                st.error(f"   - No es un archivo CSV válido o no está en un formato de encoding compatible")
-                st.error(f"   - Error: {error_lectura}")
-                st.error(f"   - Este archivo no será procesado.")
-                archivos_con_errores.append(archivo.name)
+                archivos_con_problemas.append({
+                    'nombre': archivo.name,
+                    'problema': f"No es un CSV válido o no está en formato compatible. {error_lectura}"
+                })
                 continue
             
             if not es_utf8:
-                st.warning(f"⚠️ El archivo '{archivo.name}' no está en formato UTF-8:")
-                st.warning(f"   - Encoding detectado: {encoding_usado}")
-                st.warning(f"   - Se recomienda convertir el archivo a UTF-8")
-                st.warning(f"   - El archivo será procesado pero puede tener problemas con caracteres especiales")
+                archivos_con_problemas.append({
+                    'nombre': archivo.name,
+                    'problema': f"No está en formato UTF-8 (detectado: {encoding_usado}). Se recomienda convertir a UTF-8."
+                })
             
             # Detectar campus del nombre del archivo
             campus_detectado = None
@@ -326,11 +309,6 @@ def procesar_archivos_categoria(archivos_subidos, categoria):
                 if match:
                     campus_detectado = match.group(1)
             
-            if campus_detectado:
-                st.success(f"✅ Campus detectado: {campus_detectado}")
-            else:
-                st.warning(f"⚠️ No se pudo detectar el campus en el nombre del archivo")
-            
             # Auditar archivo
             errores, total_registros, registros_validos = auditar_archivo(
                 df, archivo.name, categoria, encoding_usado, es_utf8
@@ -344,8 +322,8 @@ def procesar_archivos_categoria(archivos_subidos, categoria):
                     resultado['Registros Válidos'] = registros_validos
                     
                     if errores:
-                        # Resumir errores para la tabla (máximo 200 caracteres)
-                        errores_filtrados = [e for e in errores if not e.startswith('ADVERTENCIA:')]
+                        # Resumir errores para la tabla
+                        errores_filtrados = [e for e in errores if not e.startswith('Archivo no está en formato UTF-8')]
                         
                         if errores_filtrados:
                             resumen_errores = '; '.join(errores_filtrados[:3])
@@ -354,31 +332,25 @@ def procesar_archivos_categoria(archivos_subidos, categoria):
                             resultado['Errores'] = resumen_errores
                             resultado['Completo'] = 'NO'
                         else:
-                            # Solo advertencias (como encoding), no es error crítico
-                            resultado['Errores'] = 'Solo advertencias de formato'
+                            # Solo advertencias de encoding
+                            resultado['Errores'] = 'Solo problemas de formato UTF-8'
                             resultado['Completo'] = 'SI'
                     else:
                         resultado['Errores'] = ''
                         resultado['Completo'] = 'SI'
                     break
             
-            archivos_procesados.append(archivo.name)
-            st.success(f"✅ Archivo '{archivo.name}' procesado exitosamente")
-            
         except Exception as e:
-            st.error(f"❌ Error crítico procesando '{archivo.name}':")
-            st.error(f"   - {str(e)}")
-            st.error(f"   - Este archivo no será incluido en el reporte")
-            archivos_con_errores.append(archivo.name)
+            archivos_con_problemas.append({
+                'nombre': archivo.name,
+                'problema': f"Error crítico: {str(e)}"
+            })
     
-    # Mostrar resumen de procesamiento
-    if archivos_procesados:
-        st.success(f"✅ Se procesaron exitosamente {len(archivos_procesados)} archivo(s)")
-    
-    if archivos_con_errores:
-        st.error(f"❌ {len(archivos_con_errores)} archivo(s) no pudieron ser procesados:")
-        for archivo_error in archivos_con_errores:
-            st.error(f"   - {archivo_error}")
+    # Mostrar solo archivos con problemas
+    if archivos_con_problemas:
+        st.error("❌ Archivos que no cumplieron los requerimientos:")
+        for problema in archivos_con_problemas:
+            st.error(f"📄 **{problema['nombre']}**: {problema['problema']}")
     
     return pd.DataFrame(resultados)
 
@@ -406,8 +378,6 @@ def main():
     2. Sube los archivos CSV correspondientes (**preferiblemente en formato UTF-8**)
     3. Revisa los resultados de la auditoría
     4. Descarga el reporte en Excel
-    
-    ⚠️ **Importante**: Los archivos deben estar en formato CSV UTF-8 para garantizar la correcta lectura de caracteres especiales.
     """)
     
     # Selector de categoría
@@ -456,12 +426,10 @@ def main():
         # Botón para procesar
         if st.button("🔍 Procesar Auditoría", type="primary"):
             with st.spinner("Procesando archivos..."):
-                st.markdown("### 📋 Proceso de Validación")
                 
                 # Procesar archivos
                 resultados_df = procesar_archivos_categoria(archivos_subidos, categoria_seleccionada)
                 
-                st.markdown("---")
                 st.markdown("### 📊 Resultados de la Auditoría")
                 
                 # Métricas resumen
@@ -514,7 +482,7 @@ def main():
                 type=['csv'],
                 accept_multiple_files=True,
                 key=f"uploader_{categoria}",
-                help=f"Sube todos los archivos CSV de {categoria} (preferiblemente UTF-8)"
+                help=f"Sube todos los archivos CSV de {categoria}"
             )
             if archivos_categoria:
                 archivos_completos[categoria] = archivos_categoria
@@ -525,7 +493,7 @@ def main():
                     resultados_completos = {}
                     
                     for categoria, archivos in archivos_completos.items():
-                        st.markdown(f"#### Procesando {categoria}...")
+                        st.markdown(f"#### {categoria}")
                         resultados_completos[categoria] = procesar_archivos_categoria(archivos, categoria)
                     
                     st.markdown("---")
@@ -536,10 +504,10 @@ def main():
                             col1, col2 = st.columns(2)
                             with col1:
                                 campus_con_archivos = len(df[df['En Teams'] == 'SI'])
-                                st.metric(f"Campus con archivos ({categoria})", campus_con_archivos)
+                                st.metric(f"Campus con archivos", campus_con_archivos)
                             with col2:
                                 campus_completos = len(df[df['Completo'] == 'SI'])
-                                st.metric(f"Campus completos ({categoria})", campus_completos)
+                                st.metric(f"Campus completos", campus_completos)
                             
                             st.dataframe(df, use_container_width=True, hide_index=True)
                     
