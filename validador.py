@@ -7,7 +7,7 @@ import re
 import chardet
 from typing import Tuple, Optional, List, Dict
 from config import CATEGORIAS_CONFIG, COLUMNAS_NO_CORREGIBLES
-from gemini_corrector import GeminiCorrector
+from openai_corrector import OpenAICorrector
 
 def detectar_encoding(archivo) -> Tuple[Optional[str], float]:
     """Detecta el encoding del archivo"""
@@ -92,8 +92,8 @@ def validar_email_mentoreo(email, matricula) -> Tuple[bool, Optional[str]]:
     return True, None
 
 def validar_valor_con_correccion(valor, lista_valores: List[str], nombre_campo: str, 
-                                corrector: GeminiCorrector) -> Tuple[bool, Optional[str], Optional[str]]:
-    """Valida un valor contra una lista, usando Gemini para corrección si es necesario"""
+                                corrector: OpenAICorrector) -> Tuple[bool, Optional[str], Optional[str]]:
+    """Valida un valor contra una lista, usando OpenAI para corrección si es necesario"""
     if pd.isna(valor):
         return False, f"{nombre_campo} no puede estar vacío", None
     
@@ -109,8 +109,8 @@ def validar_valor_con_correccion(valor, lista_valores: List[str], nombre_campo: 
     if nombre_campo in COLUMNAS_NO_CORREGIBLES:
         return False, f"{nombre_campo} '{valor_str}' no es válido", None
     
-    # Intentar corrección con Gemini
-    valor_corregido = corrector.corregir_valor_con_gemini(valor_str, lista_valores, nombre_campo)
+    # Intentar corrección con OpenAI
+    valor_corregido = corrector.corregir_valor_con_openai(valor_str, lista_valores, nombre_campo)
     
     if valor_corregido:
         return True, None, valor_corregido
@@ -119,7 +119,7 @@ def validar_valor_con_correccion(valor, lista_valores: List[str], nombre_campo: 
     return False, f"{nombre_campo} '{valor_str}' no es válido. Opciones: {', '.join(lista_valores[:3])}{'...' if len(lista_valores) > 3 else ''}", None
 
 def auditar_archivo(df: pd.DataFrame, nombre_archivo: str, categoria: str, 
-                   encoding_usado: str, es_utf8: bool, corrector: GeminiCorrector) -> Tuple[List[str], int, int, List[str]]:
+                   encoding_usado: str, es_utf8: bool, corrector: OpenAICorrector) -> Tuple[List[str], int, int, List[str]]:
     """Audita un archivo CSV según la categoría"""
     errores = []
     advertencias = []
